@@ -12,10 +12,13 @@ from dotenv import load_dotenv
 last_sent_time = 0
 load_dotenv()
 dp = Dispatcher()
-binance_url = "wss://stream.binance.com:9443/ws/btcusdt@aggTrade"
+binance_url = (
+    "wss://stream.binance.com:9443/stream?streams=btcusdt@aggTrade/ethusdt@aggTrade"
+)
 tg_token = os.getenv("TELEGRAM_BOT_TOKEN")
 tg_id = os.getenv("USER_ID")
 bot = Bot(token=tg_token)
+crypto = {}
 
 
 @dp.message(CommandStart())
@@ -28,10 +31,19 @@ async def fetch_binance_trades(url: str):
     global last_sent_time
     async with websockets.connect(url) as ws:
         async for msg in ws:
-            data = json.loads(msg)
-            price = data["p"]
+            root_data = json.loads(msg)
+            data = root_data["data"]
+            price = float(data["p"])
+            name = data["s"]
+            crypto[name] = price
             if time.time() - last_sent_time > 5:
-                await send_message_to_tg(msg=f"Последняя цена BTC/USDT: {price}")
+                sorted_crypto = dict(
+                    sorted(crypto.items(), key=lambda item: item[1], reverse=True)
+                )
+                msg_lines = ["**Последние цены криптовалют:**"]
+                for coin_name, coin_price in sorted_crypto.items():
+                    msg_lines.append(f"• {coin_name}: ${coin_price:,.2f}")
+                await send_message_to_tg(msg="\n".join(msg_lines))
                 last_sent_time = time.time()
 
 
